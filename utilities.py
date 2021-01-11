@@ -1,6 +1,6 @@
 import numpy as np     
     
-def calc_vote(results):
+def calc_vote(results: np.ndarray):
     """
     VoteClassifier 
 
@@ -24,9 +24,9 @@ def calc_vote(results):
     return np.array(output)
 
     
-def correct_class(target,
-                  predicted,
-                  sample_size
+def correct_class(target: np.ndarray,
+                  predicted: np.ndarray,
+                  sample_size: int
                  ):
     """
     Get correctly classified results
@@ -47,7 +47,7 @@ def correct_class(target,
 
     return np.array(intersection_list)
 
-def binary_encode(target,
+def binary_encode(target: np.ndarray,
                   classifier
                  ):
     """
@@ -84,7 +84,7 @@ def binary_encode(target,
 
     return encoded, labels
 
-def binary_decode(target,
+def binary_decode(target: np.ndarray,
                   classifier
                  ):
     """
@@ -98,7 +98,7 @@ def binary_decode(target,
     Returns:
         Decoded binary array
     """
-    sample_size = classifier._sample_size
+    sample_size = len(target)
     labels = classifier._labels
 
     decoded = np.empty(shape=target.shape,dtype=object)

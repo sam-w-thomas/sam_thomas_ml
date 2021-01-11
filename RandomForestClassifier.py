@@ -9,14 +9,11 @@ from sklearn.utils.validation import check_is_fitted
 import numpy as np
 from math import exp
 from math import log
-import warnings
 import utilities as util # provides general classifier functionality, programmed by Samuel Thomas
-
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class RandomForest(BaseEstimator, ClassifierMixin):
     def __init__(self, 
-                 size: int=None, 
+                 size: int=50, 
                  max_depth: int=None, 
                  max_features: Union[int, str]="sqrt",
                  criteria: str="gini", 
@@ -57,7 +54,7 @@ class RandomForest(BaseEstimator, ClassifierMixin):
     
     def fit(self,
             data: np.ndarray,
-            target: Union[np.ndarray, None]
+            target: np.ndarray
            ):
         """
         Build classifier (train the classifier)
@@ -85,8 +82,8 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         
         
     def build_forest(self,
-                     data,
-                     target
+                     data: np.ndarray,
+                     target: np.ndarray
                     ):
         """
         Builds forest - called by .fit
@@ -94,8 +91,6 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         Args:
             data: Feature-Matrix 
             target: Target classification
-        
-        Raises:
         """
         trees = []
         
@@ -121,17 +116,15 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         self.trees = trees
         
     def build_forest_boost(self,
-            data: np.ndarray,
-            target: np.ndarray
-           ):
+                           data: np.ndarray,
+                           target: np.ndarray
+                          ):
         """
         Builds (Ada)boosted forest - called by .fit
         
         Args:
             data: Feature-matrix [Matrix]
             target: Target classification [Array] 
-        
-        Raises
         """
         target, self._labels = util.binary_encode(target, self) #AdaBoost is binary classification by default. Could  implment multi-class AdaBoost via AdaBoost-SAMME (Zhu, H. Zou, S. Rosset, T. Hastie, “Multi-class AdaBoost”, 2009)
 
@@ -139,7 +132,8 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         
         for i in range(self.size):
             tree = DecisionTreeClassifier(
-                            max_depth=self.max_depth   #Create stump (weak learner)
+                            max_depth=self.max_depth,   #Create stump (weak learner)
+                            criterion=self.criteria
                             )
             tree.fit(data,target)
 
@@ -152,7 +146,6 @@ class RandomForest(BaseEstimator, ClassifierMixin):
             total_error = np.sum(errors) 
             
             if total_error == 0.0: #Perfect fit when all predictions correct 
-                print("AdaBoost hit a perfect fit after" + str(int(len(self.trees)) + 1) + "iterations")
                 break
                
             model_perf = 0.5 * log((1 - total_error)/ total_error)
@@ -171,14 +164,15 @@ class RandomForest(BaseEstimator, ClassifierMixin):
             rows = [value for value in range(self._sample_size)]
             sel_rows = np.random.choice(rows,size=self._sample_size, replace=True, p=weights)
  
-            data = data[[sel_rows]] 
-            target = target[[sel_rows]]
+            data = data[sel_rows] 
+            target = target[sel_rows]
         
         self.trees = np.array(self.trees)
             
          
     def predict(self,
-                data: np.ndarray
+                data: np.ndarray,
+                target: np.ndarray=None
                ):
         """
         Predict classes for data supplied. Columns are treated as the vote for each sample.
@@ -191,7 +185,6 @@ class RandomForest(BaseEstimator, ClassifierMixin):
             
         Raises:
             NotFittedError
-        
         """
         check_is_fitted(self)
         
@@ -205,30 +198,29 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         return np.array(result,dtype=self._target_type) # Make same type as expected
         
         
-    def predict_bag(self, data):
+    def predict_bag(self, 
+                    data: np.ndarray
+                   ):
         """
         Predicts classes using (bagging) forest - called by .predict
         
         Args:
             target: Array structure to classify
-        
-        Raises:
-            NotFittedError
         """
         
         tree_size = len(self.trees)
-        results = np.empty((tree_size, self._sample_size), dtype=object)
+        results = np.empty((tree_size, len(data)), dtype=object)
         # Matrix containg classification for all trees - column represents vote for each sample
         for i in range(tree_size):
-            result = self.trees[i].predict(data) 
+            result = self.trees[i].predict(data)
             results[i] = result 
             
         return util.calc_vote(results) # Majority vote calculation
     
     
     def predict_boost(self,
-                data: np.ndarray
-               ):
+                      data: np.ndarray
+                     ):
         """
         Predicts classes using boosted forest - called by .predict
         
@@ -237,14 +229,10 @@ class RandomForest(BaseEstimator, ClassifierMixin):
             
         Returns:
             Results of classification. Array structure
-            
-        Raises:
-            NotFittedError
-        
         """
         sum = 0
         
-        result_matrix = np.empty(shape=(self._sample_size, self.size))
+        result_matrix = np.empty(shape=(len(data), self.size))
         
         # Create matrix of results - each row is predicted values for each sample
         column_i = 0
@@ -255,10 +243,11 @@ class RandomForest(BaseEstimator, ClassifierMixin):
             column_i += 1
         
         # Calculate final result
-        prediction = np.empty(self._sample_size, dtype=int)
-        for i in range(self._sample_size):
+        sample_size = len(data)
+        prediction = np.empty(sample_size, dtype=int)
+        for i in range(sample_size):
             sum_val = 0
-            for j in range(self.size):
+            for j in range(len(self.trees)):
                 sum_val += self.trees[j][1] * result_matrix[i][j]
                 
             prediction[i] = np.sign(sum_val)
@@ -267,9 +256,9 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         
             
     def bootstrap(self, 
-                  data, 
-                  target, 
-                  bootstrap_num
+                  data: np.ndarray, 
+                  target: np.ndarray, 
+                  bootstrap_num: Union[int, float]
                  ):
         """
         Generate random subset of instances(sampels) - performs row sampling with replacement 
@@ -303,8 +292,8 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         return data, target
     
     def score(self,
-              data,
-              target
+              data: np.ndarray,
+              target: np.ndarray
              ):
         """
         Calculate mean accuracy score for data and target labels
@@ -337,7 +326,7 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         """
         
         if tree_index > len(self.trees) - 1 or not int:
-            raise ValueError
+            raise ValueError("Invalid tree")
             
         plt.figure(figsize=size)
         if len(self.trees[0]) == 2:
@@ -354,6 +343,9 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         
         Returns:
             All decisions tree in ensmble. Returns None if .fit not called
+            
+        Raises:
+            NotFittedError
         """
         check_is_fitted(self)
         return self.trees      
